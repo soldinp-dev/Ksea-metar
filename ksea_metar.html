@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KSEA METAR LOG</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e12;
+    --panel: #0f1620;
+    --border: #1e2d3d;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --warn: #ffb800;
+    --danger: #ff4757;
+    --text: #c8d8e8;
+    --muted: #4a6070;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(0,212,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(0,255,157,0.04) 0%, transparent 60%);
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .station-id {
+    font-family: var(--mono);
+    font-size: 48px;
+    color: var(--accent);
+    letter-spacing: 6px;
+    line-height: 1;
+    text-shadow: 0 0 30px rgba(0,212,255,0.3);
+  }
+
+  .station-name {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .header-right {
+    text-align: right;
+  }
+
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(0,255,157,0.08);
+    border: 1px solid rgba(0,255,157,0.25);
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .last-updated {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.high::before { background: var(--danger); }
+  .stat-card.current::before { background: var(--accent); }
+  .stat-card.reports::before { background: var(--accent2); }
+
+  .stat-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 36px;
+    line-height: 1;
+  }
+
+  .stat-card.high .stat-value { color: var(--danger); }
+  .stat-card.current .stat-value { color: var(--accent); }
+  .stat-card.reports .stat-value { color: var(--accent2); }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 9px 20px;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn:hover {
+    background: rgba(0,212,255,0.1);
+    box-shadow: 0 0 12px rgba(0,212,255,0.2);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn.loading {
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .status-msg {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    padding: 8px 0;
+  }
+
+  .status-msg.error { color: var(--danger); }
+  .status-msg.ok { color: var(--accent2); }
+
+  .table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    display: grid;
+    grid-template-columns: 90px 70px 70px 70px 80px 90px 1fr;
+    gap: 0;
+    padding: 10px 16px;
+    background: rgba(0,212,255,0.05);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .metar-row {
+    display: grid;
+    grid-template-columns: 90px 70px 70px 70px 80px 90px 1fr;
+    gap: 0;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(30,45,61,0.6);
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: background 0.15s;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .metar-row:hover {
+    background: rgba(0,212,255,0.04);
+  }
+
+  .metar-row:last-child { border-bottom: none; }
+
+  .metar-row.is-high {
+    background: rgba(255,71,87,0.06);
+  }
+
+  .metar-row.is-high:hover {
+    background: rgba(255,71,87,0.1);
+  }
+
+  .col-time { color: var(--text); }
+  .col-temp { color: var(--warn); font-weight: 600; }
+  .col-temp.is-high-temp { color: var(--danger); }
+  .col-dew { color: var(--muted); }
+  .col-wind { color: var(--accent); font-size: 12px; }
+  .col-vis { color: var(--text); }
+  .col-sky { color: var(--accent2); font-size: 11px; }
+  .col-raw { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .high-badge {
+    display: inline-block;
+    background: var(--danger);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .empty-state .icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
+
+  footer {
+    margin-top: 20px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .toggle {
+    position: relative;
+    width: 32px; height: 18px;
+    background: var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle.on { background: rgba(0,212,255,0.4); }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.2s;
+  }
+
+  .toggle.on::after {
+    left: 17px;
+    background: var(--accent);
+  }
+
+  @media (max-width: 700px) {
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .table-header, .metar-row { grid-template-columns: 80px 60px 1fr; }
+    .col-dew, .col-wind, .col-vis, .col-sky, .col-raw { display: none; }
+    .station-id { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="station-id">KSEA</div>
+    <div class="station-name">Seattle-Tacoma International Airport &mdash; METAR Log</div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><span class="live-dot"></span> LIVE DATA</div>
+    <div class="last-updated" id="lastUpdated">—</div>
+  </div>
+</header>
+
+<div class="stats-row">
+  <div class="stat-card high">
+    <div class="stat-label">Intraday High</div>
+    <div class="stat-value" id="statHigh">—</div>
+    <div class="stat-sub" id="statHighTime">from METAR reports</div>
+  </div>
+  <div class="stat-card current">
+    <div class="stat-label">Latest Temp</div>
+    <div class="stat-value" id="statCurrent">—</div>
+    <div class="stat-sub" id="statCurrentTime">most recent report</div>
+  </div>
+  <div class="stat-card reports">
+    <div class="stat-label">Reports Today</div>
+    <div class="stat-value" id="statCount">—</div>
+    <div class="stat-sub">hourly METARs</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="fetchBtn" onclick="fetchMETAR()">↺ Fetch Latest</button>
+  <div class="auto-refresh">
+    <div class="toggle" id="autoToggle" onclick="toggleAuto()"></div>
+    <span>Auto-refresh (5 min)</span>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-header">
+    <span>Time (PST)</span>
+    <span>Temp °F</span>
+    <span>Dew °F</span>
+    <span>Wind</span>
+    <span>Visibility</span>
+    <span>Sky</span>
+    <span>Raw METAR</span>
+  </div>
+  <div id="tableBody">
+    <div class="empty-state">
+      <div class="icon">📡</div>
+      <div>Press FETCH LATEST to load today's METAR reports</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>SOURCE: aviationweather.gov / ADDS METAR API &mdash; KSEA</span>
+  <span id="footerDate"></span>
+</footer>
+
+<script>
+  let autoInterval = null;
+  let autoOn = false;
+
+  // Set today's date in footer
+  const now = new Date();
+  document.getElementById('footerDate').textContent =
+    now.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  function celsiusToF(c) {
+    return Math.round(c * 9/5 + 32);
+  }
+
+  function parseTempFromRaw(raw) {
+    // Parse T group: T02170156 or T12170156
+    const tGroup = raw.match(/\bT([01])(\d{3})([01]\d{3})\b/);
+    if (tGroup) {
+      const neg = tGroup[1] === '1';
+      const tenths = parseInt(tGroup[2]);
+      const tempC = (neg ? -tenths : tenths) / 10;
+      return (tempC * 9/5 + 32);  // return float for precision
+    }
+    // Fallback: parse standard temp group like 10/06
+    const tempGroup = raw.match(/\b(M?\d{2})\/(M?\d{2})\b/);
+    if (tempGroup) {
+      const t = tempGroup[1].replace('M', '-');
+      return parseInt(t) * 9/5 + 32;
+    }
+    return null;
+  }
+
+  function parseMetar(raw) {
+    const parts = raw.trim().split(/\s+/);
+    let time = '', tempF = null, dewF = null, wind = '', vis = '', sky = [];
+
+    // Time
+    const timeMatch = raw.match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+    if (timeMatch) {
+      const h = parseInt(timeMatch[2]);
+      const m = parseInt(timeMatch[3]);
+      // Convert UTC to PST (UTC-8) or PDT (UTC-7) - March is PST
+      let localH = h - 8;
+      if (localH < 0) localH += 24;
+      const ampm = localH >= 12 ? 'PM' : 'AM';
+      const h12 = localH % 12 || 12;
+      time = `${h12}:${m.toString().padStart(2,'0')} ${ampm}`;
+    }
+
+    // Temp (precise)
+    tempF = parseTempFromRaw(raw);
+
+    // Dew (from standard group)
+    const tdGroup = raw.match(/\b(M?\d{2})\/(M?\d{2})\b/);
+    if (tdGroup) {
+      const d = tdGroup[2].replace('M', '-');
+      dewF = Math.round(parseInt(d) * 9/5 + 32);
+    }
+
+    // Wind
+    const windMatch = raw.match(/\b(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT\b/);
+    if (windMatch) {
+      const dir = windMatch[1];
+      const spd = parseInt(windMatch[2]);
+      const gust = windMatch[4] ? `G${windMatch[4]}` : '';
+      wind = `${dir}@${spd}${gust}kt`;
+    } else if (raw.includes('00000KT') || raw.includes('CALM')) {
+      wind = 'CALM';
+    }
+
+    // Visibility
+    const visMatch = raw.match(/\b(\d+(?:\/\d+)?)\s*SM\b/);
+    if (visMatch) vis = visMatch[1] + 'SM';
+
+    // Sky
+    const skyRe = /(CLR|SKC|FEW|SCT|BKN|OVC)(\d{3})?/g;
+    let sm;
+    while ((sm = skyRe.exec(raw)) !== null) {
+      sky.push(sm[1] + (sm[2] ? sm[2]*100 + 'ft' : ''));
+    }
+
+    return { time, tempF, dewF, wind, vis, sky: sky.join(' '), raw };
+  }
+
+  async function fetchMETAR() {
+    const btn = document.getElementById('fetchBtn');
+    const status = document.getElementById('statusMsg');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.textContent = '↺ FETCHING...';
+    status.textContent = 'Connecting to aviationweather.gov...';
+    status.className = 'status-msg';
+
+    // Build date string for today
+    const today = new Date();
+    const yyyy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth()+1).padStart(2,'0');
+    const dd = String(today.getUTCDate()).padStart(2,'0');
+
+    const url = `https://aviationweather.gov/api/data/metar?ids=KSEA&format=raw&taf=false&hours=24`;
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+
+      // Split into individual METARs
+      const lines = text.trim().split('\n').filter(l => l.includes('KSEA'));
+
+      if (lines.length === 0) throw new Error('No METAR data returned');
+
+      // Parse each
+      const reports = lines.map(parseMetar).filter(r => r.time);
+
+      // Filter to today local time only (rough — keep all since API returns last 24h)
+      // Sort newest first
+      reports.sort((a, b) => {
+        // extract raw hour for sorting
+        const getZ = r => { const m = r.raw.match(/\d{6}Z/); return m ? m[0] : ''; };
+        return getZ(b).localeCompare(getZ(a));
+      });
+
+      renderTable(reports);
+
+      // Stats
+      const temps = reports.filter(r => r.tempF !== null);
+      if (temps.length > 0) {
+        const maxF = Math.max(...temps.map(r => r.tempF));
+        const maxReport = temps.find(r => r.tempF === maxF);
+        const latestTemp = temps[0].tempF;
+
+        document.getElementById('statHigh').textContent = Math.round(maxF) + '°F';
+        document.getElementById('statHighTime').textContent =
+          `(${maxF.toFixed(1)}°F precise) @ ${maxReport.time}`;
+        document.getElementById('statCurrent').textContent = Math.round(latestTemp) + '°F';
+        document.getElementById('statCurrentTime').textContent =
+          `(${latestTemp.toFixed(1)}°F precise) @ ${temps[0].time}`;
+      }
+
+      document.getElementById('statCount').textContent = reports.length;
+      document.getElementById('lastUpdated').textContent =
+        'Updated ' + new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+      status.textContent = `✓ Loaded ${reports.length} reports`;
+      status.className = 'status-msg ok';
+
+    } catch (err) {
+      status.textContent = '✗ Error: ' + err.message;
+      status.className = 'status-msg error';
+    }
+
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = '↺ Fetch Latest';
+  }
+
+  function renderTable(reports) {
+    const body = document.getElementById('tableBody');
+    if (reports.length === 0) {
+      body.innerHTML = '<div class="empty-state"><div class="icon">📡</div><div>No reports found</div></div>';
+      return;
+    }
+
+    const temps = reports.filter(r => r.tempF !== null).map(r => r.tempF);
+    const maxTemp = temps.length ? Math.max(...temps) : null;
+
+    body.innerHTML = reports.map(r => {
+      const isHigh = r.tempF !== null && r.tempF === maxTemp;
+      const tempDisplay = r.tempF !== null
+        ? `<span class="col-temp ${isHigh ? 'is-high-temp' : ''}">${Math.round(r.tempF)}°${isHigh ? '<span class="high-badge">HIGH</span>' : ''}</span>`
+        : '<span class="col-temp">—</span>';
+
+      return `<div class="metar-row ${isHigh ? 'is-high' : ''}">
+        <span class="col-time">${r.time}</span>
+        ${tempDisplay}
+        <span class="col-dew">${r.dewF !== null ? r.dewF + '°' : '—'}</span>
+        <span class="col-wind">${r.wind || '—'}</span>
+        <span class="col-vis">${r.vis || '—'}</span>
+        <span class="col-sky">${r.sky || '—'}</span>
+        <span class="col-raw" title="${r.raw}">${r.raw}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function toggleAuto() {
+    autoOn = !autoOn;
+    const toggle = document.getElementById('autoToggle');
+    toggle.classList.toggle('on', autoOn);
+    if (autoOn) {
+      autoInterval = setInterval(fetchMETAR, 5 * 60 * 1000);
+    } else {
+      clearInterval(autoInterval);
+    }
+  }
+
+  // Auto-fetch on load
+  fetchMETAR();
+</script>
+</body>
+</html>
